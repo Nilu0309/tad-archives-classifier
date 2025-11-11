@@ -1,0 +1,17 @@
+
+paths:
+  data_raw: data/raw
+  data_processed: data/processed
+  models_dir: models
+  results_dir: results
+
+training:
+  base_model: bert-base-uncased
+  epochs: 5
+  lr: 5e-5
+  batch_size: 8
+  seed: 42
+
+evaluation:
+  metrics: [accuracy, precision_macro, recall_macro, f1_macro]
+  per_class: true

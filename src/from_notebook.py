@@ -1,0 +1,1170 @@
+
+# Auto-extracted from Copy_of_NLP_CW.ipynb
+# Tip: refactor into functions and a CLI as needed.
+
+import json
+import zipfile
+import numpy as np
+import pandas as pd
+import os
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import spacy
+
+
+# ---- Cell separator ----
+
+# Define the path to the ZIP file containing the dataset
+zip_path = "/content/tad_coursework_archives.zip"
+
+# Open the ZIP file in read mode ('r') and extract its contents
+with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+    zip_ref.extractall("/content/extracted")  # Extract files to the specified folder
+
+# List the extracted files to verify successful extraction and identify the JSON file
+extracted_files = os.listdir("/content/extracted")
+print("Extracted Files:", extracted_files)  # Print the names of extracted files
+
+# Define the path to the JSON file inside the extracted folder
+json_path = "/content/extracted/dataset.json"
+
+# Open and read the JSON file
+with open(json_path, "r") as json_file:
+    json_data = json.load(json_file)  # Load JSON data into a Python dictionary
+
+# Print the loaded JSON data for inspection or further processing
+print(json_data)
+
+# ---- Cell separator ----
+
+# Extract the training, validation, and test datasets from the loaded JSON data
+train_dset = json_data["train"]
+val_dset   = json_data["val"]
+test_dset  = json_data["test"]
+
+# Print the number of samples in each dataset
+print(f"Number of training samples: {len(train_dset)}")
+print(f"Number of validation samples: {len(val_dset)}")
+print(f"Number of test samples: {len(test_dset)}")
+
+# ---- Cell separator ----
+
+# Function to extract unique keys from a dataset (assuming each item is a dictionary)
+def extract_unique_keys(data):
+  return {field for entry in data for field in entry.keys()}
+
+# ---- Cell separator ----
+
+# Extract unique keys from training, validation, and test datasets
+train_keys = extract_unique_keys(train_dset)  # Extract keys from the training dataset
+val_keys   = extract_unique_keys(val_dset)    # Extract keys from the validation dataset
+test_keys  = extract_unique_keys(test_dset)   # Extract keys from the test dataset
+
+# Print the unique keys found in each dataset
+print(f"Unique keys in training dataset: {train_keys}")
+print(f"Unique keys in validation dataset: {val_keys}")
+print(f"Unique keys in test dataset: {test_keys}")
+
+# ---- Cell separator ----
+
+train_dset[0].keys()
+
+# ---- Cell separator ----
+
+# A dictionary to standardize the key names across different datasets
+key_map = {
+    'description': 'content',  # Convert 'description' to 'content'
+    'text': 'content',         # Convert 'text' to 'content'
+    'labl': 'label',           # Fix the typo 'labl' to 'label'
+    'key': 'label',            # Standardize 'key' as 'label'
+}
+
+def adjust_key(key, mapping_dict):
+    """
+    A helper function to map a key to a standardized key name.
+
+    Parameters:
+        key (str): The key to be standardized.
+        mapping_dict (dict): The dictionary containing mappings from incorrect to standardized keys.
+
+    Returns:
+        str: The standardized key.
+    """
+    return mapping_dict.get(key, key)  # Return the standardized key if found, otherwise return the original key
+
+def process_data_points(data, mapping_dict):
+    """
+    Processes a dataset to standardize its key names.
+
+    Parameters:
+        data (list of dicts): The dataset where each entry is a dictionary.
+        mapping_dict (dict): A dictionary containing the key mappings.
+
+    Returns:
+        list of dicts: The dataset with standardized keys.
+    """
+    standardized_data = []  # This will store the processed entries with corrected keys
+
+    # Iterate through each data point (dictionary) in the dataset
+    for entry in data:
+        standardized_entry = {}  # Start with an empty dictionary for the processed data point
+
+        # Ensure required fields ('id', 'label', 'content') are included, even if missing in the original entry
+        standardized_entry['id'] = None
+        standardized_entry['label'] = None
+        standardized_entry['content'] = None
+
+        # Iterate through the original dictionary and map keys to standardized names
+        for key, value in entry.items():
+            # Use the helper function to standardize the key
+            standardized_key = adjust_key(key, mapping_dict)
+            standardized_entry[standardized_key] = value  # Assign the original value to the standardized key
+
+        standardized_data.append(standardized_entry)  # Append the processed entry to the new dataset
+
+    return standardized_data
+
+# Applying the process function to the dataset (train_dset as an example)
+train_data_standardized = process_data_points(train_dset, key_map)
+
+# Display the first processed entry to verify the key standardization
+print(train_data_standardized[0])
+
+# ---- Cell separator ----
+
+# After manually inspecting the data, I noticed inconsistencies in the labels.
+# To effectively analyze and clean these irregularities, I will convert the data
+# into a Pandas DataFrame. This allows to leverage Pandas' powerful tools
+# for handling missing values, filtering, and transformations.
+
+# Convert the processed datasets into Pandas DataFrames for easier manipulation
+train_df = pd.DataFrame(train_data_standardized)  # Training dataset as a DataFrame
+val_df   = pd.DataFrame(val_dset)    # Validation dataset as a DataFrame
+test_df  = pd.DataFrame(test_dset)   # Test dataset as a DataFrame
+
+# ---- Cell separator ----
+
+# Based on the task description, we are supposed to have five distinct labels,
+# but upon inspection, I find that there are 15 different labels. This discrepancy
+# will require us to clean and fix the labels. Additionally, some rows have missing labels.
+
+def check_labels(df):
+    """
+    Function to check the number of unique labels in the dataset.
+
+    Parameters:
+        df (pandas.DataFrame): The DataFrame containing the dataset, which includes a 'label' column.
+
+    Returns:
+        int: The number of unique labels present in the 'label' column of the DataFrame.
+    """
+    # Extract all unique labels from the 'label' column
+    labels = df['label'].unique()
+
+    # Return the count of unique labels
+    return len(labels)
+
+# ---- Cell separator ----
+
+# Check the number of unique labels in the training, validation, and test datasets
+train_labl_num = check_labels(train_df)  # Get the number of unique labels in the training dataset
+val_labl_num   = check_labels(val_df)    # Get the number of unique labels in the validation dataset
+test_labl_num  = check_labels(test_df)   # Get the number of unique labels in the test dataset
+
+# Print the number of unique labels for each dataset
+print(f"Number of unique labels in the training dataset: {train_labl_num}")
+print(f"Number of unique labels in the validation dataset: {val_labl_num}")
+print(f"Number of unique labels in the test dataset: {test_labl_num}")
+
+# ---- Cell separator ----
+
+# There is an issue with the training labels. To fix this,
+# I will create a function that converts the labels into numerical values
+# based on a predefined mapping using fuzzy matching to match labels to the list.
+
+# Install fuzzywuzzy for fuzzy string matching
+!pip install fuzzywuzzy
+from fuzzywuzzy import process  # Import fuzzywuzzy for label matching
+
+# List of correct institution labels (used for fuzzy matching)
+labels_list = [
+    "National Maritime Museum",
+    "National Railway Museum",
+    "Royal Botanic Gardens, Kew",
+    "Royal College of Physicians of London",
+    "Shakespeare Birthplace Trust"
+]
+
+# Function to fix labels using fuzzy string matching
+def fix_labels(df):
+    """
+    Function to correct labels in the dataset using fuzzy matching.
+
+    Parameters:
+        df (pandas.DataFrame): The DataFrame containing the dataset with 'label' column.
+
+    Returns:
+        pandas.DataFrame: DataFrame with corrected labels.
+    """
+    corrected_labels = []  # List to store corrected labels
+
+    for label in df['label']:
+        if isinstance(label, int):
+            # If the label is already a valid integer (0-4), it is assumed to be correct
+            corrected_labels.append(label)
+        else:
+            # Use fuzzywuzzy to find the best match from the predefined labels_list
+            best_match, score = process.extractOne(str(label), labels_list)
+
+            # Ensure the best match is valid and in the predefined list before assigning it
+            if best_match in labels_list and score > 80:
+              corrected_labels.append(labels_list.index(best_match))  # Convert name to index
+            else:
+              corrected_labels.append(None)  # Assign None if no valid match is found
+
+    df['label'] = corrected_labels  # Update the DataFrame with the corrected labels
+    return df
+
+# Apply the label correction function to the training, validation, and test datasets
+train_df = fix_labels(train_df)  # Fix labels in the training set
+val_df = fix_labels(val_df)      # Fix labels in the validation set
+test_df = fix_labels(test_df)    # Fix labels in the test set
+
+# Check and print the unique labels in each dataset after correction
+print(f"Unique labels in the training dataset: {train_df['label'].unique()}")
+print(f"Unique labels in the validation dataset: {val_df['label'].unique()}")
+print(f"Unique labels in the test dataset: {test_df['label'].unique()}")
+
+# ---- Cell separator ----
+
+# Function to check and remove missing values
+def clean_null_values(df, name):
+    """
+    Identifies and removes missing values from a given dataset.
+
+    Parameters:
+        df (pd.DataFrame): The dataset to clean.
+        name (str): Name of the dataset (for display purposes).
+
+    Returns:
+        None (Modifies the DataFrame in place).
+    """
+
+    # Count the number of missing values in each column
+    null_counts = df.isnull().sum()
+    print(f"Missing values in {name} dataset before cleanup:\n{null_counts}\n")
+
+    # Remove rows where 'content' is missing, since it is essential for analysis
+    df.dropna(subset=['content'], inplace=True)
+
+    # Check and print missing values after cleanup
+    print(f"Missing values in {name} dataset after cleanup:\n{df.isnull().sum()}\n")
+    print("-" * 70)  # Separator for better readability
+
+# Apply function to train, validation, and test datasets
+clean_null_values(train_df, "Training")
+clean_null_values(val_df, "Validation")
+clean_null_values(test_df, "Test")
+
+# ---- Cell separator ----
+
+# Check the datatype of the text column
+print(f"{train_df['content'].dtype = }")
+print(f"{val_df['content'].dtype   = }")
+print(f"{test_df['content'].dtype  = }")
+
+# Identify and drop non-string values in the 'content' column of the train_df
+train_df = train_df[train_df['content'].apply(lambda x: isinstance(x, str))]
+
+# Reset index
+train_df.reset_index(drop=True, inplace=True)
+
+# Ensure that all datasets are of string type for consistency
+train_df['content'] = train_df['content'].astype(str)
+val_df['content'] = val_df['content'].astype(str)
+test_df['content'] = test_df['content'].astype(str)
+
+# ---- Cell separator ----
+
+# Function to check and enforce string type for the 'content' column
+def enforce_text_type(df, name):
+    """Ensures that all entries in the 'content' column are strings."""
+    print(f"Before conversion, '{name}' dataset content type: {df['content'].dtype}")
+
+    # Convert content to string type if necessary
+    df['content'] = df['content'].astype(str)
+
+    # Verify conversion
+    print(f"After conversion, '{name}' dataset content type: {df['content'].dtype}")
+    print("-" * 70)
+
+# Apply function to all datasets
+enforce_text_type(train_df, "Training")
+enforce_text_type(val_df, "Validation")
+enforce_text_type(test_df, "Test")
+
+# Convert 'content' column to string type for all datasets
+datasets = {'Training': train_df, 'Validation': val_df, 'Test': test_df}
+
+for name, df in datasets.items():
+    df['content'] = df['content'].astype(str)
+    print(f"Converted 'content' column to string in {name} dataset.")
+
+# Confirm every row in 'content' is a string
+for name, df in datasets.items():
+    if df['content'].apply(lambda x: isinstance(x, str)).all():
+        print(f" All values in '{name}' dataset 'content' column are strings.")
+    else:
+        print(f" Warning: Non-string values found in '{name}' dataset.")
+
+# ---- Cell separator ----
+
+# Store dataset lengths in a dictionary
+split_lengths = {
+    'train': len(train_df),  # Get the number of samples in the training dataset
+    'val': len(val_dset),    # Get the number of samples in the validation dataset
+    'test': len(test_dset)   # Get the number of samples in the test dataset
+}
+
+# Calculate the total number of samples across all datasets
+total_count = sum(split_lengths.values())
+
+# Create a summary DataFrame containing dataset statistics
+split_stats = pd.DataFrame([
+    {
+        'Split': split.upper(),  # Convert dataset name to uppercase (TRAIN, VAL, TEST)
+        'Samples': count,        # Store the sample count for the dataset
+        'Percentage': round((count / total_count) * 100, 2)  # Calculate and round the percentage share
+    }
+    for split, count in split_lengths.items()  # Iterate through the dataset sizes
+])
+
+# Display the dataset statistics
+print("Sample counts and percentage splits for the datasets:\n")
+print(split_stats.to_string(index=False))  # Print the DataFrame without the index
+
+# Display the total number of samples
+print(f"\nTotal number of samples: {total_count}")
+
+# ---- Cell separator ----
+
+max(train_df['content'].str.len())
+min(train_df['content'].str.len())
+
+# ---- Cell separator ----
+
+# Function to compute min and max text lengths in a dataset
+def calculate_text_lengths(df, name):
+    lengths = df['content'].str.len()
+    max_length, min_length = lengths.max(), lengths.min()
+    print(f"{name} Dataset:")
+    print(f"\t Longest text: {max_length} characters")
+    print(f"\t Shortest text: {min_length} characters")
+    print("-" * 50)
+    return max_length, min_length
+
+# Loop over datasets to compute min/max lengths
+length_stats = {name: calculate_text_lengths(df, name) for name, df in datasets.items()}
+
+# ---- Cell separator ----
+
+# text_pipeline_spacy from Lab 2
+
+nlp = spacy.load("en_core_web_sm")
+
+def text_pipeline_spacy(text):
+    tokens = []
+    doc = nlp(text)
+    for t in doc:
+        if not t.is_stop and not t.is_punct and not t.is_space:
+            tokens.append(t.lemma_.lower())
+    return tokens
+
+# Example usage:
+text_pipeline_spacy("Of all the things I miss, I miss my mind the most.")
+
+# ---- Cell separator ----
+
+from collections import Counter  # For counting token occurrences
+from rich.console import Console  # For displaying formatted output
+from rich.table import Table  # For creating structured tables
+
+console = Console()  # Initialize console for rich output
+
+def compute_top_tokens(df, n=5):
+    """
+    Computes the top N most frequent tokens for each class in a dataset.
+
+    Parameters:
+        df (pd.DataFrame): The dataset containing 'label' and 'content' columns.
+        n (int): The number of top tokens to retrieve per class.
+
+    Returns:
+        dict: A dictionary where keys are class labels and values are lists of top N tokens with their counts.
+    """
+    token_counts = {i: Counter() for i in range(5)}  # Initialize token counters for each class (assuming 5 classes)
+
+    # Tokenize text and count token occurrences for each class
+    for label, text in zip(df['label'], df['content']):
+        token_counts[label].update(text_pipeline_spacy(text))  # Tokenize and count occurrences
+
+    # Retrieve the top N tokens for each class
+    return {cls: counter.most_common(n) for cls, counter in token_counts.items()}
+
+# Compute the most frequent tokens for each dataset
+top_tokens = {
+    "Training": compute_top_tokens(train_df),
+    "Validation": compute_top_tokens(val_df),
+    "Test": compute_top_tokens(test_df)
+}
+
+# Display results in a structured table format using Rich
+for dataset, class_tokens in top_tokens.items():
+    console.print(f"\n[bold underline cyan]{dataset} Dataset[/bold underline cyan]")
+
+    for class_id, tokens in class_tokens.items():
+        label = labels_list[class_id]  # Retrieve the corresponding label name
+
+        # Create a Rich table for displaying token statistics
+        table = Table(title=f"Top 5 Tokens for [green]{label}[/green]", show_header=True, header_style="bold magenta")
+        table.add_column("Token", style="yellow")  # Token column
+        table.add_column("Count", justify="right", style="white")  # Count column
+
+        # Populate the table with top tokens and their frequencies
+        for token, count in tokens:
+            table.add_row(token, str(count))
+
+        console.print(table)  # Display the table
+
+# ---- Cell separator ----
+
+# Define file paths for the three LLM-generated classification results
+file_paths = {
+    "template_A": "/content/extracted/llm_prompt_template_1.json",
+    "template_B": "/content/extracted/llm_prompt_template_2.json",
+    "template_C": "/content/extracted/llm_prompt_template_3.json"
+}
+
+# Function to load JSON data from a given file path
+def load_json_data(filepath):
+    with open(filepath, "r") as file:
+        return json.load(file)
+
+# Load data from all three templates into separate dictionaries
+llm_results = {key: load_json_data(path) for key, path in file_paths.items()}
+
+# Print the length of each dataset to confirm alignment with the training set
+for key, data in llm_results.items():
+    print(f"Length of {key}: {len(data)}")
+
+# Convert the JSON lists into Pandas DataFrames for easier manipulation
+df_llm_results = {key: pd.DataFrame(data) for key, data in llm_results.items()}
+
+# Display the first 5 rows of one dataset for verification
+df_llm_results["template_B"].head(5)
+
+# ---- Cell separator ----
+
+# Extract only relevant columns (ID and predicted labels) from LLM-generated DataFrames
+df_A = df_llm_results["template_A"][["id", "next_token"]]
+df_B = df_llm_results["template_B"][["id", "next_token"]]
+df_C = df_llm_results["template_C"][["id", "next_token"]]
+
+# Extract ground truth labels from training data
+ground_truth = train_df[["id", "label"]]
+
+# Perform an inner join on all datasets using "id" as the key
+df_merged = (
+    df_A.merge(df_B, on="id", suffixes=("_A", "_B"))
+        .merge(df_C, on="id")
+        .merge(ground_truth, on="id")
+)
+
+# Rename third LLM output column for consistency
+df_merged = df_merged.rename(columns={'next_token': 'next_token_C'})
+
+# Print lengths of datasets before and after merging to confirm no data loss
+print(f"Length of template_A predictions: {len(df_A)}")
+print(f"Length of template_B predictions: {len(df_B)}")
+print(f"Length of template_C predictions: {len(df_C)}")
+print(f"Length of merged dataset: {len(df_merged)}")
+print(f"Length of ground truth labels: {len(ground_truth)}")
+
+# Display a sample of merged data for verification
+df_merged.head(3)
+
+# Analyze unique predicted labels for each prompt template
+print(f"Unique classes predicted by template_A: {df_merged['next_token_A'].unique()}")
+print(f"Unique classes predicted by template_B: {df_merged['next_token_B'].unique()}")
+print(f"Unique classes predicted by template_C: {df_merged['next_token_C'].unique()}")
+
+# Replace invalid outputs with a new hypothetical class (class 5)
+df_merged.replace({'next_token_A': {'Based': 5, 'The': 5}}, inplace=True)
+df_merged.replace({'next_token_C': {'I': 5, 'None': 5}}, inplace=True)
+
+df_merged.head(4)
+
+# ---- Cell separator ----
+
+# Display the unique predicted class labels after converting invalid outputs to class 5
+print("These are the labels predicted by each prompt template after converting invalid outputs to a sixth class (label 5):")
+print(f"Template A predictions: {df_merged['next_token_A'].unique()}")
+print(f"Template B predictions: {df_merged['next_token_B'].unique()}")
+print(f"Template C predictions: {df_merged['next_token_C'].unique()}")
+
+# Convert predicted labels to integers for evaluation metrics
+df_merged['next_token_A'] = df_merged['next_token_A'].astype(int)
+df_merged['next_token_B'] = df_merged['next_token_B'].astype(int)
+df_merged['next_token_C'] = df_merged['next_token_C'].astype(int)
+
+# ---- Cell separator ----
+
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+
+# Display class labels after invalid outputs have been converted to class 5
+print("Class labels per template after handling invalid predictions:")
+for key in ['next_token_A', 'next_token_B', 'next_token_C']:
+    print(f"Unique labels in {key}: {df_merged[key].unique()}")
+
+# Ensure prediction columns are in integer format
+df_merged['next_token_B'] = df_merged['next_token_B'].astype(int)
+df_merged['next_token_C'] = df_merged['next_token_C'].astype(int)
+
+# Evaluation function for a single template's predictions
+def evaluate_predictions(y_pred, y_true):
+    return {
+        'accuracy': accuracy_score(y_true, y_pred),
+        'precision_macro': precision_score(y_true, y_pred, average='macro'),
+        'recall_macro': recall_score(y_true, y_pred, average='macro'),
+        'f1_macro': f1_score(y_true, y_pred, average='macro')
+    }
+
+# Compute metrics for all three templates
+results = {
+    "template_A": evaluate_predictions(df_merged['next_token_A'], df_merged['label']),
+    "template_B": evaluate_predictions(df_merged['next_token_B'], df_merged['label']),
+    "template_C": evaluate_predictions(df_merged['next_token_C'], df_merged['label']),
+}
+
+# Convert results to DataFrame for better readability
+df_scores = pd.DataFrame(results).T
+df_scores
+
+# ---- Cell separator ----
+
+from sklearn.metrics import classification_report
+
+# Function to generate macro scores and accuracy from a classification report
+def extract_macro_metrics(y_pred, y_true):
+    report = classification_report(y_true, y_pred, output_dict=True)
+    macro_metrics = report['macro avg']
+    macro_metrics['accuracy'] = report['accuracy']
+    return macro_metrics
+
+# Evaluate each template
+macro_scores = {
+    "template_A": extract_macro_metrics(df_merged['next_token_A'], df_merged['label']),
+    "template_B": extract_macro_metrics(df_merged['next_token_B'], df_merged['label']),
+    "template_C": extract_macro_metrics(df_merged['next_token_C'], df_merged['label']),
+}
+
+# Create a DataFrame to display the results
+df_macro_report = pd.DataFrame(macro_scores)
+df_macro_report
+
+# ---- Cell separator ----
+
+import os
+
+# Define save path and datasets to export
+save_dir = "/content/extracted/"
+datasets_to_save = {
+    "train_data.csv": train_df,
+    "val_data.csv": val_df,
+    "test_data.csv": test_df
+}
+
+# Save each DataFrame to CSV
+for filename, df in datasets_to_save.items():
+    file_path = os.path.join(save_dir, filename)
+    df.to_csv(file_path, index=False)
+    print(f"Saved {filename} to {file_path}")
+
+# ---- Cell separator ----
+
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# TRansformer related imports
+!pip install datasets
+import datasets
+from datasets import load_dataset, Dataset, DatasetDict
+from transformers import AutoTokenizer
+from transformers import set_seed, AutoModelForSequenceClassification
+from transformers import DataCollatorWithPadding, TrainingArguments, Trainer
+
+
+# Sk-learn metrics tools
+from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, accuracy_score
+
+# ---- Cell separator ----
+
+# Count how many samples belong to each class in each dataset split
+# Count class occurrences in the training set
+train_dist = train_df['label'].value_counts().sort_index()
+
+# Count class occurrences in the validation set
+val_dist = val_df['label'].value_counts().sort_index()
+
+# Count class occurrences in the test set
+test_dist = test_df['label'].value_counts().sort_index()
+
+# Combine all class distributions into one DataFrame for easy comparison
+# Concatenate class counts side by side (axis=1 means columns)
+class_distribution = pd.concat([train_dist, val_dist, test_dist], axis=1)
+
+# Rename the columns for clarity
+class_distribution.columns = ['Train', 'Validation', 'Test']
+
+# Add a 'Label' column to make it easier to identify which class each row refers to
+class_distribution['Label'] = class_distribution.index
+
+# Reset the index to turn the class index into a normal numbered index
+class_distribution.reset_index(drop=True, inplace=True)
+
+print("Class distribution across dataset splits:")
+print(class_distribution)
+
+# ---- Cell separator ----
+
+# --- Prepare data for grouped bar chart ---
+labels = class_distribution['Label']
+x = np.arange(len(labels))  # the label locations
+width = 0.25  # width of each bar
+
+# --- Define custom colors ---
+colors = {
+    'Train': '#D8BFD8',
+    'Validation': 'skyblue',
+    'Test': '#FFFACD'
+}
+
+# --- Create the plot ---
+plt.figure(figsize=(10, 6))
+
+# Plot bars
+plt.bar(x - width, class_distribution['Train'], width=width, color=colors['Train'], label='Train')
+plt.bar(x, class_distribution['Validation'], width=width, color=colors['Validation'], label='Validation')
+plt.bar(x + width, class_distribution['Test'], width=width, color=colors['Test'], label='Test')
+
+# --- Formatting the chart ---
+plt.xlabel('Class Index', fontsize=12)
+plt.ylabel('Number of Records', fontsize=12)
+plt.title('Class Distribution Across Train, Validation, and Test Sets', fontsize=14)
+plt.xticks(x, labels)
+plt.legend()
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+
+plt.tight_layout()
+plt.show()
+
+# ---- Cell separator ----
+
+# Load CSV files
+data_files = {
+    "train":      os.path.join(save_dir, "train_data.csv"),
+    "validation": os.path.join(save_dir, "val_data.csv"),
+    "test":       os.path.join(save_dir, "test_data.csv")
+}
+
+dataset = load_dataset("csv", data_files=data_files)
+
+# Print the structure
+print(dataset)
+
+# ---- Cell separator ----
+
+# --- Load the BERT tokenizer ---
+bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# --- Define a function to tokenize each example ---
+def tokenize_record(example_batch):
+    return bert_tokenizer(example_batch["content"], padding="max_length", truncation=True)
+
+# --- Apply the tokenizer to the dataset ---
+tokenized = dataset.map(tokenize_record, batched=True)
+
+# --- Remove unnecessary original columns ---
+tokenized = tokenized.remove_columns(["id", "content"])
+
+# --- Convert labels and inputs to PyTorch tensors ---
+tokenized.set_format("torch")
+
+# --- Inspect the tokenized dataset structure ---
+print(tokenized)
+
+
+# ---- Cell separator ----
+
+# --- Define training hyperparameters ---
+bert_learning_rate = 5e-5        # Standard learning rate for fine-tuning BERT
+bert_batch_size = 8              # Number of samples per batch
+bert_num_epochs = 8              # Total number of training epochs
+bert_weight_decay = 0.1          # Regularization to prevent overfitting
+
+# --- Load pre-trained BERT model for classification ---
+# We're fine-tuning 'bert-base-uncased' on a 5-class classification task
+bert_model = AutoModelForSequenceClassification.from_pretrained(
+    'bert-base-uncased',
+    num_labels=5
+)
+
+# ---- Cell separator ----
+
+training_args = TrainingArguments(
+    output_dir       = "my_awesome_model", # HuggingFace wants a name for your model
+    eval_strategy    = "epoch",            # How often we want to evaluate the model
+    learning_rate    = bert_learning_rate,
+    logging_strategy = "epoch",
+    num_train_epochs = bert_num_epochs,
+    # weight_decay     = weight_decay,
+    report_to        = 'none',             # Tells it to not use a tracking/reporting system (e.g. Weights & Biases)
+    per_device_train_batch_size = bert_batch_size,
+    per_device_eval_batch_size  = bert_batch_size,
+
+    )
+
+
+data_collator = DataCollatorWithPadding(tokenizer=bert_tokenizer)
+
+trainer = Trainer(
+    model         = bert_model,                       # The model you want to train
+    args          = training_args,                    # The various training arguments set up above
+    train_dataset = tokenized['train'],               # The data to use to update the weights
+    eval_dataset  = tokenized['validation'],          # The data to use for evaluation
+    data_collator = data_collator,                    # A data collator that does clever things moving data around
+)
+
+
+trainer.train()
+
+# ---- Cell separator ----
+
+# --- Generate predictions on the validation set ---
+validation_results = trainer.predict(tokenized["validation"])
+
+# --- Extract predicted logits and convert to class labels ---
+predicted_labels = np.argmax(validation_results.predictions, axis=1)
+print(f"Predicted class labels: {predicted_labels}")
+
+# --- Retrieve ground truth labels from the validation dataset ---
+true_labels = tokenized["validation"]["label"]
+print(f"Actual class labels: {true_labels}")
+
+# ---- Cell separator ----
+
+# --- Compute classification metrics (precision, recall, F1-score, accuracy) ---
+bert_classification_report = classification_report(true_labels, predicted_labels, digits=4, output_dict=True)
+
+# --- Convert report dictionary into a DataFrame for better visualization ---
+bert_metrics_df = pd.DataFrame(bert_classification_report).transpose()
+
+# --- Display the final report ---
+bert_metrics_df
+
+# ---- Cell separator ----
+
+# Generate confusion matrix
+conf_matrix = confusion_matrix(true_labels, predicted_labels)
+
+# Plot the confusion matrix
+plt.figure(figsize=(6, 5))
+sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", linewidths=1, linecolor="black")
+plt.xlabel("Predicted Labels")
+plt.ylabel("Actual Labels")
+plt.title("Confusion Matrix")
+plt.show()
+
+# ---- Cell separator ----
+
+# Define label mapping
+label_mapping = {0: 4, 1: 3, 2: 2, 3: 1, 4: 0}
+
+# Apply mapping to predicted labels
+corrected_predictions = [label_mapping[label] for label in predicted_labels]
+
+# Compute the new confusion matrix
+new_conf_matrix = confusion_matrix(true_labels, corrected_predictions)
+
+# Plot the confusion matrix
+plt.figure(figsize=(6, 5))
+sns.heatmap(new_conf_matrix, annot=True, fmt="d", cmap="Blues", linewidths=1, linecolor="black")
+plt.xlabel("Predicted Labels")
+plt.ylabel("Actual Labels")
+plt.title("Confusion Matrix")
+plt.show()
+
+# ---- Cell separator ----
+
+# Create an empty list to store the corrected labels
+corrected_labels = []
+
+# Loop through each label in the validation dataset and apply the mapping
+for item in val_df['label']:
+    corrected_labels.append(label_mapping[item])  # Replace incorrect labels with correct ones
+
+# Add the corrected labels as a new column in the DataFrame
+val_df['corrected_labels'] = corrected_labels
+
+# Display the first 5 rows to verify the corrections
+val_df.head(5)
+
+# ---- Cell separator ----
+
+# Iterate through each row in the validation dataset with an index
+for index, row in val_df.iterrows():
+    original_label = row['label']  # Extract the original label
+    corrected_label = label_mapping[original_label]  # Get the corrected label using the mapping
+
+    # Check if the label correction is applied properly
+    if original_label != corrected_label:
+        print(f"Index: {index}, Original label: {original_label}, Corrected label: {corrected_label}")
+
+print("Label checking completed successfully.")
+
+# ---- Cell separator ----
+
+val_df.drop(columns=['label'], inplace=True)
+val_df.rename(columns={'corrected_labels': 'label'}, inplace=True)
+
+val_df.head(10)
+
+# ---- Cell separator ----
+
+# Create a DatasetDict from preprocessed Pandas DataFrames
+corrected_dset = DatasetDict({
+    "train"     : Dataset.from_pandas(train_df),  # Training dataset
+    "validation": Dataset.from_pandas(val_df),    # Validation dataset
+    "test"      : Dataset.from_pandas(test_df)    # Test dataset
+})
+
+# Print dataset structure to verify correctness
+print(corrected_dset)
+
+def preprocess_dataset(model_name, dataset):
+    """
+    Tokenizes the dataset using the specified model's tokenizer.
+
+    Args:
+        model_name (str): The name of the Hugging Face model (e.g., 'bert-base-uncased').
+        dataset (DatasetDict): The dataset containing text data.
+
+    Returns:
+        DatasetDict: The tokenized dataset formatted for PyTorch.
+        tokenizer: The tokenizer used for preprocessing.
+    """
+
+    # Load the tokenizer for the specified model
+    tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=512)
+
+    # Define a function to tokenize the dataset
+    def tokenize_function(examples):
+        return tokenizer(examples["content"], padding="max_length", truncation=True)
+
+    # Apply tokenization to the entire dataset
+    tokenized_datasets = dataset.map(tokenize_function, batched=True)
+
+    # Remove unnecessary columns ('id' and 'content') to avoid issues during training
+    tokenized_datasets = tokenized_datasets.remove_columns(["id", "content"])
+
+    # Convert the dataset format to PyTorch tensors for compatibility with Hugging Face models
+    tokenized_datasets = tokenized_datasets.with_format("torch")
+
+    return tokenized_datasets, tokenizer
+
+# ---- Cell separator ----
+
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+
+def compute_metrics(eval_pred):
+    """
+    Computes evaluation metrics (accuracy, precision, recall, and F1-score) for model evaluation.
+
+    Args:
+        eval_pred: A tuple containing (logits, labels) from the model predictions.
+
+    Returns:
+        dict: A dictionary containing accuracy, precision, recall, and F1-score.
+    """
+
+    logits, labels = eval_pred  # Extract model outputs and true labels
+    predictions = logits.argmax(axis=-1)  # Convert logits to class predictions
+
+    # Compute precision, recall, and F1-score using macro averaging
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average="macro")
+
+    # Compute overall accuracy
+    acc = accuracy_score(labels, predictions)
+
+    return {"accuracy": acc, "precision": precision, "recall": recall, "f1": f1}
+
+def hyperparameter_tuning(model, tokenizer, dataset, learning_rate=5e-5, batch_size=8, epochs=8, weight_decay=0.1):
+    """
+    Sets up and configures the Hugging Face Trainer for fine-tuning transformer models.
+
+    Args:
+        model: The pre-trained transformer model to be fine-tuned.
+        tokenizer: Tokenizer corresponding to the model.
+        dataset (DatasetDict): The dataset containing train and validation splits.
+        learning_rate (float): Learning rate for the optimizer.
+        batch_size (int): Number of samples per batch.
+        epochs (int): Number of training epochs.
+        weight_decay (float): Weight decay (L2 regularization) for optimizer.
+
+    Returns:
+        Trainer: The configured Hugging Face Trainer object.
+    """
+
+    # Define training arguments for the Trainer
+    training_args = TrainingArguments(
+        output_dir="my_awesome_model",  # Directory to save trained model
+        evaluation_strategy="epoch",    # Evaluate model at the end of each epoch
+        save_strategy="epoch",          # Save model checkpoints at the end of each epoch
+        learning_rate=learning_rate,    # Learning rate for optimization
+        logging_strategy="epoch",       # Log training progress after each epoch
+        num_train_epochs=epochs,        # Number of training epochs
+        report_to='none',               # Disable reporting to external tools like WandB
+        load_best_model_at_end=True,    # Load the best model based on validation metrics
+        metric_for_best_model="f1",     # Select the best model using F1-score
+        greater_is_better=True,         # Higher F1-score indicates better model performance
+
+        per_device_train_batch_size=batch_size,  # Training batch size
+        per_device_eval_batch_size=batch_size,   # Evaluation batch size
+    )
+
+    # Data collator for dynamic padding (ensures efficient batch processing)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    # Initialize Trainer with model, arguments, dataset, and evaluation metrics
+    trainer = Trainer(
+        model=model,                          # Transformer model to train
+        args=training_args,                   # Training configuration
+        train_dataset=dataset['train'],       # Training dataset
+        eval_dataset=dataset['validation'],   # Validation dataset
+        data_collator=data_collator,          # Handles dynamic padding
+        compute_metrics=compute_metrics       # Evaluation function for performance tracking
+    )
+
+    return trainer
+
+# ---- Cell separator ----
+
+# Preprocess the dataset for BERT, using the 'bert-base-uncased' tokenizer and the corrected dataset
+tokenized_dataset_bert, tokenizer_bert = preprocess_dataset('bert-base-uncased', corrected_dset)
+
+# Load the pre-trained BERT model for sequence classification with 5 labels
+model = AutoModelForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=5)
+
+# Perform hyperparameter tuning on the BERT model using the tokenized dataset and the BERT tokenizer
+bert_trainer = hyperparameter_tuning(model, tokenizer_bert, tokenized_dataset_bert)
+
+# Train the BERT model with the hyperparameters tuned earlier
+bert_trainer.train()
+
+# Predict the labels for the validation dataset using the trained BERT model
+y_pred_all_BERT_2 = bert_trainer.predict(tokenized_dataset_bert["validation"])
+
+# Get the predicted class labels by selecting the index with the highest probability
+y_pred_BERT_2 = np.argmax(y_pred_all_BERT_2[0], axis=1)
+
+# Get the true class labels from the validation set
+y_true_BERT_2 = tokenized_dataset_bert['validation']['label']
+
+# Calculate the F1 score
+# f1_BERT_2 = f1_score(y_true_BERT_2, y_pred_BERT_2, average='macro')
+
+# Compute precision, recall, and F1-score for each class, and output as a dictionary
+report_dict_BERT_2 = classification_report(y_true_BERT_2, y_pred_BERT_2, digits=4, output_dict=True)
+
+# Convert the classification report dictionary into a DataFrame for better readability
+report_df_BERT_2 = pd.DataFrame(report_dict_BERT_2).transpose()
+
+# Display the classification report DataFrame
+report_df_BERT_2
+
+
+# ---- Cell separator ----
+
+conf_matrix_BERT_2 = confusion_matrix(y_true_BERT_2, y_pred_BERT_2)
+
+# Plot the confusion matrix
+plt.figure(figsize=(6, 5))
+sns.heatmap(conf_matrix_BERT_2, annot=True, fmt="d", cmap="Blues", linewidths=1, linecolor="black")
+plt.xlabel("Predicted Labels")
+plt.ylabel("Actual Labels")
+plt.title("Confusion Matrix")
+plt.show()
+
+# ---- Cell separator ----
+
+# Running roberta-base
+tokenized_dataset_roberta, tokenizer_roberta = preprocess_dataset('roberta-base', corrected_dset)
+
+model = AutoModelForSequenceClassification.from_pretrained('roberta-base', num_labels=5)
+
+roberta_trainer = hyperparameter_tuning(model, tokenizer_roberta, tokenized_dataset_roberta)
+
+roberta_trainer.train()
+
+
+
+# ---- Cell separator ----
+
+# Computing metrics
+
+y_pred_all_roberta = roberta_trainer.predict(tokenized_dataset_roberta["validation"])
+y_pred_roberta = np.argmax(y_pred_all_roberta[0], axis=1)
+y_true_roberta = tokenized_dataset_roberta['validation']['label']
+# f1_roberta = f1_score(y_true_roberta, y_pred_roberta, average='macro')
+
+
+# Compute precision, recall, and F1-score
+report_dict_roberta = classification_report(y_true_roberta, y_pred_roberta, digits=4, output_dict=True)
+
+report_df_roberta = pd.DataFrame(report_dict_roberta).transpose()
+report_df_roberta
+
+# ---- Cell separator ----
+
+# Plot confusion matrix
+cm_roberta = confusion_matrix(y_true_roberta, y_pred_roberta)
+
+disp = ConfusionMatrixDisplay(confusion_matrix=cm_roberta)
+
+disp.plot()
+
+plt.show()
+
+# ---- Cell separator ----
+
+# Running distilbert-base-uncased
+tokenized_dataset_distilbert, tokenizer_distilbert = preprocess_dataset('distilbert-base-uncased', corrected_dset)
+
+model = AutoModelForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=5)
+
+distilbert_trainer = hyperparameter_tuning(model, tokenizer_distilbert, tokenized_dataset_distilbert)
+
+distilbert_trainer.train()
+
+# ---- Cell separator ----
+
+# Compute metrics
+y_pred_all_distilbert = distilbert_trainer.predict(tokenized_dataset_distilbert["validation"])
+y_pred_distilbert = np.argmax(y_pred_all_distilbert[0], axis=1)
+y_true_distilbert = tokenized_dataset_distilbert['validation']['label']
+# f1_distilbert = f1_score(y_true_distilbert, y_pred_distilbert, average='macro')
+
+
+# Compute precision, recall, and F1-score
+report_dict_distilbert = classification_report(y_true_distilbert, y_pred_distilbert, digits=4, output_dict=True)
+
+report_df_distilbert = pd.DataFrame(report_dict_distilbert).transpose()
+report_df_distilbert
+
+# ---- Cell separator ----
+
+# Confusion Matrix
+cm_distilbert = confusion_matrix(y_true_distilbert, y_pred_distilbert)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm_distilbert)
+disp.plot()
+plt.show()
+
+# ---- Cell separator ----
+
+# Running microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract
+
+tokenized_dataset_BiomedBERT, tokenizer_BiomedBERT = preprocess_dataset('microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract', corrected_dset)
+
+model = AutoModelForSequenceClassification.from_pretrained('microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract', num_labels=5)
+BiomedBERT_trainer = hyperparameter_tuning(model, tokenizer_BiomedBERT, tokenized_dataset_BiomedBERT)
+BiomedBERT_trainer.train()
+
+
+# ---- Cell separator ----
+
+# Compute metrics
+y_pred_all_BiomedBERT = BiomedBERT_trainer.predict(tokenized_dataset_BiomedBERT["validation"])
+y_pred_BiomedBERT = np.argmax(y_pred_all_BiomedBERT[0], axis=1)
+y_true_BiomedBERT = tokenized_dataset_BiomedBERT['validation']['label']
+# f1_BiomedBERT = f1_score(y_true_BiomedBERT, y_pred_BiomedBERT, average='macro')
+
+
+# Compute precision, recall, and F1-score
+report_dict_BiomedBERT = classification_report(y_true_BiomedBERT, y_pred_BiomedBERT, digits=4, output_dict=True)
+
+report_df_BiomedBERT = pd.DataFrame(report_dict_BiomedBERT).transpose()
+report_df_BiomedBERT
+
+# ---- Cell separator ----
+
+# Confusion matrix
+cm_BiomedBERT = confusion_matrix(y_true_BiomedBERT, y_pred_BiomedBERT)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm_BiomedBERT)
+disp.plot()
+plt.show()
+
+# ---- Cell separator ----
+
+# Final evaluation of the models using their F1-score (macro average)
+f1_models = {
+    'BERT_2'    : report_df_BERT_2.loc['macro avg','f1-score'],    # F1-score for the BERT model
+    'distilbert' : report_df_distilbert.loc['macro avg','f1-score'], # F1-score for the DistilBERT model
+    'roberta'    : report_df_roberta.loc['macro avg','f1-score'],    # F1-score for the RoBERTa model
+    'BiomedBERT' : report_df_BiomedBERT.loc['macro avg','f1-score'], # F1-score for the BiomedBERT model
+}
+
+# Use pprint to neatly print the dictionary of F1-scores
+import pprint as pp
+pp.pprint(f1_models)
+
+# Predict the labels for the BiomedBERT model using the validation dataset
+y_pred_all_BiomedBERT = BiomedBERT_trainer.predict(tokenized_dataset_BiomedBERT["validation"])
+
+# Get the predicted class labels by selecting the index with the highest probability
+y_pred_BiomedBERT = np.argmax(y_pred_all_BiomedBERT[0], axis=1)
+
+# Get the true class labels from the validation set for BiomedBERT
+y_true_BiomedBERT = tokenized_dataset_BiomedBERT['validation']['label']
+
+# Optionally, calculate the F1 score (commented out)
+# f1_BiomedBERT = f1_score(y_true_BiomedBERT, y_pred_BiomedBERT, average='macro')
+
+# Compute precision, recall, and F1-score for the BiomedBERT model
+report_dict_BiomedBERT = classification_report(y_true_BiomedBERT, y_pred_BiomedBERT, digits=4, output_dict=True)
+
+# Convert the classification report dictionary into a DataFrame for BiomedBERT
+report_df_BiomedBERT = pd.DataFrame(report_dict_BiomedBERT).transpose()
+
+# Predict the labels for the best model (DistilBERT) using the test dataset
+y_pred_all_bestmodel = distilbert_trainer.predict(tokenized_dataset_distilbert["test"])
+
+# Get the predicted class labels by selecting the index with the highest probability
+y_pred_bestmodel = np.argmax(y_pred_all_bestmodel[0], axis=1)
+
+# Get the true class labels from the test set for the best model
+y_true_bestmodel = tokenized_dataset_distilbert['test']['label']
+
+# Compute precision, recall, and F1-score for the best model (DistilBERT)
+report_dict_bestmodel = classification_report(y_true_bestmodel, y_pred_bestmodel, digits=4, output_dict=True)
+
+# Convert the classification report dictionary into a DataFrame for the best model
+report_df_bestmodel = pd.DataFrame(report_dict_bestmodel).transpose()
+
+# Display the classification report DataFrame for the best model
+report_df_bestmodel
